@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoGame - Recoge y Vende Criptomonedas</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+</head>
+<body>
+    <div id="game-container">
+        <div id="game-title">
+            <h1>🪙 CryptoGame</h1>
+            <p>Recoge monedas y véndelas en el momento perfecto</p>
+        </div>
+        
+        <!-- El canvas del juego se insertará aquí automáticamente por Phaser -->
+        <div id="phaser-game"></div>
+        
+        <div id="game-instructions">
+            <h3>📋 Instrucciones:</h3>
+            <ul>
+                <li>🏃‍♂️ Muévete con las <strong>flechas</strong> o <strong>WASD</strong></li>
+                <li>🪙 Recoge las monedas que caen (Bitcoin ₿ y Ethereum Ξ)</li>
+                <li>📊 Observa los precios en las gráficas de la izquierda</li>
+                <li>💰 Mantén la flecha derecha en el stand SELL por 2 segundos para vender</li>
+                <li>⏰ Tienes 2 minutos para conseguir el máximo beneficio</li>
+            </ul>
+        </div>
+        
+        <div id="game-controls">
+            <button id="pause-btn">⏸️ Pausa</button>
+            <button id="restart-btn">🔄 Reiniciar</button>
+        </div>
+    </div>
+
+    <!-- Cargar el script del juego -->
+    <script src="game.js"></script>
+</body>
+</html> 
