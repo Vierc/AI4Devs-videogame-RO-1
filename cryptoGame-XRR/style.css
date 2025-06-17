@@ -75,7 +75,14 @@ canvas {
     margin: 0 18px;
 }
 
-.game-topbar .music-button {
+.game-topbar .controls-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.game-topbar .music-button,
+.game-topbar .pause-button {
     background: rgba(52, 211, 153, 0.18);
     border: 2px solid rgba(52, 211, 153, 0.32);
     border-radius: 12px;
@@ -84,7 +91,6 @@ canvas {
     color: #38b2ac;
     cursor: pointer;
     transition: all 0.3s ease;
-    margin: 0 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -92,14 +98,28 @@ canvas {
     backdrop-filter: blur(4px);
 }
 
-.game-topbar .music-button:hover {
+.game-topbar .pause-button {
+    background: rgba(255, 193, 7, 0.18);
+    border-color: rgba(255, 193, 7, 0.32);
+    color: #ffc107;
+}
+
+.game-topbar .music-button:hover,
+.game-topbar .pause-button:hover {
     background: rgba(52, 211, 153, 0.28);
     border-color: rgba(52, 211, 153, 0.5);
     transform: scale(1.05);
     box-shadow: 0 4px 16px rgba(52, 211, 153, 0.2);
 }
 
-.game-topbar .music-button:active {
+.game-topbar .pause-button:hover {
+    background: rgba(255, 193, 7, 0.28);
+    border-color: rgba(255, 193, 7, 0.5);
+    box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2);
+}
+
+.game-topbar .music-button:active,
+.game-topbar .pause-button:active {
     transform: scale(0.95);
 }
 

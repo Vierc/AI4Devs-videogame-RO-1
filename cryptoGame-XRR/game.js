@@ -17,6 +17,7 @@
 
 // ===== VARIABLES GLOBALES =====
 let game;
+let gameIsPaused = false;
 
 // ===== SISTEMA DE MÚSICA =====
 let musicEnabled = true; // Control global de música de fondo
@@ -510,6 +511,9 @@ class GameScene extends Phaser.Scene {
     update(time, delta) {
         if (!this.gameStarted) return;
         
+        // Si el juego está pausado, no actualizar nada
+        if (gameIsPaused) return;
+        
         // Actualizar sistemas
         this.updatePlayer(delta);
         this.updateCoins();
@@ -845,7 +849,12 @@ class GameScene extends Phaser.Scene {
         this.sellProgressText.setVisible(false);
         this.sellProgressText.setDepth(95); // Por encima del stand de venta
         
-        // Indicador de valor del inventario
+        // Indicador de valor del inventario con recuadro de fondo
+        this.potentialGainBackground = this.add.rectangle(900, 110, 200, 35, 0x2d3748, 0.9);
+        this.potentialGainBackground.setStrokeStyle(2, 0x4a5568);
+        this.potentialGainBackground.setDepth(89); // Detrás del texto
+        this.potentialGainBackground.setVisible(false); // Oculto inicialmente
+        
         this.potentialGainText = this.add.text(900, 110, '', {
             fontSize: '16px',
             fill: '#48bb78',
@@ -1086,7 +1095,7 @@ class GameScene extends Phaser.Scene {
         this.ethereumTrendText.setDepth(90); // Por encima de las gráficas
         
         // Indicador de controles dinámico
-        this.controlsHintText = this.add.text(512, 720, 'Usa ← → o A D para moverte', {
+        this.controlsHintText = this.add.text(512, 745, 'Usa ← → o A D para moverte', {
             fontSize: '14px',
             fill: '#4a5568',
             fontStyle: 'italic'
@@ -1375,6 +1384,7 @@ class GameScene extends Phaser.Scene {
     updateInventoryDisplay() {
         if (this.collectedCoins.length === 0) {
             this.potentialGainText.setText('');
+            this.potentialGainBackground.setVisible(false);
             return;
         }
         
@@ -1387,6 +1397,11 @@ class GameScene extends Phaser.Scene {
         
         this.potentialGainText.setText(`Ganancia: ${potentialProfit >= 0 ? '+' : ''}$${potentialProfit.toFixed(2)}`);
         this.potentialGainText.setColor(potentialProfit >= 0 ? '#48bb78' : '#f56565'); // Verde para ganancia, rojo para pérdida
+        this.potentialGainBackground.setVisible(true);
+        
+        // Cambiar color del fondo según ganancia/pérdida
+        const bgColor = potentialProfit >= 0 ? 0x1a3728 : 0x3d1a1a; // Verde oscuro o rojo oscuro
+        this.potentialGainBackground.setFillStyle(bgColor, 0.9);
     }
     
     completeSale() {
@@ -1413,6 +1428,7 @@ class GameScene extends Phaser.Scene {
         
         // Limpiar indicador de valor
         this.potentialGainText.setText('');
+        this.potentialGainBackground.setVisible(false);
     }
     
     cancelSale() {
@@ -2345,7 +2361,10 @@ class GameScene extends Phaser.Scene {
         bar.innerHTML = `
             <div class="title">🪙 CryptoGame</div>
             <div class="record" id="topbar-record">Récord: $${this.getRecord()}</div>
-            <button class="music-button" id="music-toggle" title="Alternar música">${musicEnabled ? '🔊' : '🔇'}</button>
+            <div class="controls-group">
+                <button class="music-button" id="music-toggle" title="Alternar música">${musicEnabled ? '🔊' : '🔇'}</button>
+                <button class="pause-button" id="pause-btn" title="Pausar juego">⏸️</button>
+            </div>
             <div class="instructions">
                 <span>← →</span> Mueve
                 <span>🪙</span> Recoge
@@ -2359,6 +2378,12 @@ class GameScene extends Phaser.Scene {
         const musicButton = document.getElementById('music-toggle');
         if (musicButton) {
             musicButton.addEventListener('click', toggleMusic);
+        }
+        
+        // Añadir evento click al botón de pausa
+        const pauseButton = document.getElementById('pause-btn');
+        if (pauseButton) {
+            pauseButton.addEventListener('click', togglePause);
         }
     }
 
@@ -2383,6 +2408,24 @@ class GameScene extends Phaser.Scene {
     shutdown() {
         // Detener música al salir de la escena
         stopAllMusic();
+        
+        // Asegurar que todos los sistemas estén desbloqueados
+        this.physics.resume();
+        this.time.paused = false;
+        this.tweens.resume();
+        
+        // Resetear estado de pausa
+        gameIsPaused = false;
+        
+        // Limpiar overlay de pausa
+        if (this.pauseOverlay) {
+            this.pauseOverlay.destroy();
+            this.pauseOverlay = null;
+        }
+        if (this.pauseText) {
+            this.pauseText.destroy();
+            this.pauseText = null;
+        }
         
         // Eliminar barra al salir de la escena
         if (this.topbarDiv) {
@@ -2624,21 +2667,95 @@ class GameOverScene extends Phaser.Scene {
 
 function togglePause() {
     if (game && game.scene.isActive('GameScene')) {
+        const pauseButton = document.getElementById('pause-btn');
         const gameScene = game.scene.getScene('GameScene');
-        if (gameScene.scene.isPaused()) {
-            gameScene.scene.resume();
-            document.getElementById('pause-btn').textContent = '⏸️ Pausa';
+        
+        if (gameIsPaused) {
+            // Reanudar juego
+            gameIsPaused = false;
+            
+            // Reanudar física
+            gameScene.physics.resume();
+            
+            // Reanudar timers
+            gameScene.time.paused = false;
+            
+            // Reanudar tweens
+            gameScene.tweens.resume();
+            
+            hidePauseOverlay();
+            if (pauseButton) {
+                pauseButton.textContent = '⏸️';
+                pauseButton.title = 'Pausar juego';
+            }
+            console.log('🎮 Juego reanudado');
         } else {
-            gameScene.scene.pause();
-            document.getElementById('pause-btn').textContent = '▶️ Reanudar';
+            // Pausar juego
+            gameIsPaused = true;
+            
+            // Pausar física
+            gameScene.physics.pause();
+            
+            // Pausar timers
+            gameScene.time.paused = true;
+            
+            // Pausar tweens
+            gameScene.tweens.pause();
+            
+            showPauseOverlay(gameScene);
+            if (pauseButton) {
+                pauseButton.textContent = '▶️';
+                pauseButton.title = 'Reanudar juego';
+            }
+            console.log('⏸️ Juego pausado');
         }
+    }
+}
+
+function showPauseOverlay(gameScene) {
+    // Crear overlay de pausa si no existe
+    if (!gameScene.pauseOverlay) {
+        gameScene.pauseOverlay = gameScene.add.rectangle(512, 384, 1024, 768, 0x000000, 0.7);
+        gameScene.pauseOverlay.setDepth(1000);
+        
+        gameScene.pauseText = gameScene.add.text(512, 384, 'JUEGO PAUSADO\n\nPresiona ⏸️ para continuar', {
+            fontSize: '48px',
+            fill: '#ffffff',
+            fontWeight: 'bold',
+            align: 'center'
+        }).setOrigin(0.5);
+        gameScene.pauseText.setDepth(1001);
+    }
+    
+    gameScene.pauseOverlay.setVisible(true);
+    gameScene.pauseText.setVisible(true);
+}
+
+function hidePauseOverlay() {
+    const gameScene = game.scene.getScene('GameScene');
+    if (gameScene && gameScene.pauseOverlay) {
+        gameScene.pauseOverlay.setVisible(false);
+        gameScene.pauseText.setVisible(false);
     }
 }
 
 function restartGame() {
     if (game) {
+        // Asegurar que todo esté desbloqueado antes de cambiar escena
+        if (game.scene.isActive('GameScene')) {
+            const gameScene = game.scene.getScene('GameScene');
+            gameScene.physics.resume();
+            gameScene.time.paused = false;
+            gameScene.tweens.resume();
+        }
+        
+        gameIsPaused = false; // Resetear estado de pausa
         game.scene.start('MenuScene');
-        document.getElementById('pause-btn').textContent = '⏸️ Pausa';
+        const pauseButton = document.getElementById('pause-btn');
+        if (pauseButton) {
+            pauseButton.textContent = '⏸️';
+            pauseButton.title = 'Pausar juego';
+        }
     }
 }
 
