@@ -22,7 +22,6 @@ Un emocionante minijuego de trading de criptomonedas desarrollado con **Phaser 3
 ### 🎨 Efectos Visuales Espectaculares
 
 - **Partículas Diferenciadas**: Efectos únicos para Bitcoin (dorado) y Ethereum (azul)
-- **Sistema de Combos**: Recolecta monedas rápidamente para activar combos especiales
 - **Lluvia de Monedas**: Eventos especiales con efectos de pantalla y partículas
 - **Animaciones Fluidas**: Respiración del jugador, pulsación de precios, brillos dinámicos
 - **Efectos de Éxito**: Partículas doradas y sonidos especiales para ventas exitosas
@@ -107,10 +106,9 @@ Sube todos los archivos a tu servidor web y accede desde cualquier navegador.
 
 ### 🟡 Estrategias Avanzadas
 
-1. **Sistema de Combos**: Recolecta monedas rápidamente para activar multiplicadores
-2. **Diversificación**: Balancea tu cartera entre Bitcoin y Ethereum
-3. **Timing Perfecto**: Espera el momento óptimo observando los indicadores
-4. **Lluvia de Monedas**: Aprovecha los eventos especiales para maximizar recolección
+1. **Diversificación**: Balancea tu cartera entre Bitcoin y Ethereum
+2. **Timing Perfecto**: Espera el momento óptimo observando los indicadores
+3. **Lluvia de Monedas**: Aprovecha los eventos especiales para maximizar recolección
 
 ### 🔴 Técnicas Expertas
 

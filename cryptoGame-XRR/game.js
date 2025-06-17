@@ -44,6 +44,7 @@ const GAME_SETTINGS = {
 class MenuScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MenuScene' });
+        this.topbarDiv = null;
     }
 
     preload() {
@@ -81,13 +82,13 @@ class MenuScene extends Phaser.Scene {
         this.add.rectangle(512, 384, 1024, 768, 0x87CEEB);
         
         // Título del juego
-        this.add.text(512, 200, '🪙 CRYPTOGAME', {
+        this.add.text(512, 200, '🪙 CryptoGAME', {
             fontSize: '64px',
             fill: '#2d3748',
             fontWeight: 'bold'
         }).setOrigin(0.5);
         
-        this.add.text(512, 260, 'Recoge y vende criptomonedas', {
+        this.add.text(512, 260, 'Recoge monedas y véndelas en el momento perfecto', {
             fontSize: '24px',
             fill: '#4a5568',
             fontStyle: 'italic'
@@ -132,6 +133,9 @@ class MenuScene extends Phaser.Scene {
         });
         
         console.log('✅ MenuScene creado');
+
+        // Crear barra superior igual que en GameScene
+        this.createTopbar();
     }
     
     createColorTextures() {
@@ -164,7 +168,39 @@ class MenuScene extends Phaser.Scene {
         this.scene.start('GameScene');
     }
 
+    createTopbar() {
+        // Eliminar si ya existe
+        const oldBar = document.querySelector('.game-topbar');
+        if (oldBar) oldBar.remove();
 
+        // Crear div
+        const bar = document.createElement('div');
+        bar.className = 'game-topbar';
+        bar.innerHTML = `
+            <div class="title">🪙 CryptoGame</div>
+            <div class="record" id="topbar-record">Récord: $${this.getRecord()}</div>
+            <div class="timer" id="topbar-timer">⏰ 2:00</div>
+            <div class="instructions">
+                <span>← →</span> Mueve
+                <span>🪙</span> Recoge
+                <span>🏪</span> Vende en SELL
+            </div>
+        `;
+        document.body.appendChild(bar);
+        this.topbarDiv = bar;
+    }
+
+    getRecord() {
+        return parseFloat(localStorage.getItem('cryptoGameRecord') || '0').toFixed(2);
+    }
+
+    shutdown() {
+        // Eliminar barra al salir de la escena
+        if (this.topbarDiv) {
+            this.topbarDiv.remove();
+            this.topbarDiv = null;
+        }
+    }
 }
 
 // ===== ESCENA PRINCIPAL DEL JUEGO =====
@@ -238,6 +274,7 @@ class GameScene extends Phaser.Scene {
         // Efectos visuales
         this.collectParticles = null;
         this.sellParticles = null;
+        this.topbarDiv = null;
     }
 
     create() {
@@ -261,6 +298,9 @@ class GameScene extends Phaser.Scene {
         this.createParticleEffects();
         this.initializeTimers();
         
+        // Crear barra superior HTML
+        this.createTopbar();
+        
         console.log('✅ GameScene creado correctamente');
         this.gameStarted = true;
     }
@@ -276,6 +316,7 @@ class GameScene extends Phaser.Scene {
         this.updateGameTimer(delta);
         this.updateUI();
         this.updateVisualEffects();
+        this.updateTopbar();
     }
 
     // ===== FUNCIONES DE REINICIALIZACIÓN =====
@@ -1226,8 +1267,9 @@ class GameScene extends Phaser.Scene {
         this.bitcoinCountText.setText(bitcoinInInventory.toString());
         this.ethereumCountText.setText(ethereumInInventory.toString());
         
-        const minutes = Math.floor(this.gameTimer / 60);
-        const seconds = Math.floor(this.gameTimer % 60);
+        const safeTime = Math.max(0, this.gameTimer);
+        const minutes = Math.floor(safeTime / 60);
+        const seconds = Math.floor(safeTime % 60);
         this.timerText.setText(`Tiempo: ${minutes}:${seconds.toString().padStart(2, '0')}`);
         
         this.bitcoinPriceText.setText(`$${this.bitcoinPrice.toLocaleString()}`);
@@ -1998,6 +2040,54 @@ class GameScene extends Phaser.Scene {
             }, index * 120);
         });
     }
+
+    createTopbar() {
+        // Eliminar si ya existe
+        const oldBar = document.querySelector('.game-topbar');
+        if (oldBar) oldBar.remove();
+
+        // Crear div
+        const bar = document.createElement('div');
+        bar.className = 'game-topbar';
+        bar.innerHTML = `
+            <div class="title">🪙 CryptoGame</div>
+            <div class="record" id="topbar-record">Récord: $${this.getRecord()}</div>
+            <div class="timer" id="topbar-timer">⏰ 2:00</div>
+            <div class="instructions">
+                <span>← →</span> Mueve
+                <span>🪙</span> Recoge
+                <span>🏪</span> Vende en SELL
+            </div>
+        `;
+        document.body.appendChild(bar);
+        this.topbarDiv = bar;
+    }
+
+    getRecord() {
+        return parseFloat(localStorage.getItem('cryptoGameRecord') || '0').toFixed(2);
+    }
+
+    updateTopbar() {
+        // Actualizar récord
+        const recordEl = document.getElementById('topbar-record');
+        if (recordEl) recordEl.textContent = `Récord: $${this.getRecord()}`;
+        // Actualizar timer
+        const timerEl = document.getElementById('topbar-timer');
+        if (timerEl && this.gameTimer !== undefined) {
+            const safeTime = Math.max(0, this.gameTimer);
+            const minutes = Math.floor(safeTime / 60);
+            const seconds = Math.floor(safeTime % 60);
+            timerEl.textContent = `⏰ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }
+
+    shutdown() {
+        // Eliminar barra al salir de la escena
+        if (this.topbarDiv) {
+            this.topbarDiv.remove();
+            this.topbarDiv = null;
+        }
+    }
 }
 
 // ===== ESCENA DE GAME OVER =====
@@ -2246,15 +2336,14 @@ function restartGame() {
 
 // ===== CONFIGURACIÓN DE PHASER (DESPUÉS DE LAS CLASES) =====
 const GAME_CONFIG = {
-    // Configuración de Phaser
     type: Phaser.AUTO,
     parent: 'phaser-game',
-    backgroundColor: '#87CEEB', // Azul cielo
+    backgroundColor: '#181c24',
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 0 }, // Sin gravedad global, la aplicaremos manualmente
-            debug: false // Cambiar a true para ver hitboxes durante desarrollo
+            gravity: { y: 0 },
+            debug: false
         }
     },
     scale: {
