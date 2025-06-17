@@ -18,6 +18,13 @@
 // ===== VARIABLES GLOBALES =====
 let game;
 
+// ===== SISTEMA DE MÚSICA =====
+let musicEnabled = true; // Control global de música de fondo
+let introMusic = null;   // Música para menú y game over
+let gameMusic = null;    // Música durante la partida
+let currentScene = null; // Referencia a la escena actual para controlar música
+let audioContextUnlocked = false; // Para manejar restricciones de autoplay del navegador
+
 // Configuración del juego (fácil de modificar)
 const GAME_SETTINGS = {
     GAME_DURATION: 120, // Duración del juego en segundos
@@ -40,6 +47,149 @@ const GAME_SETTINGS = {
     COIN_RAIN_INTERVAL: 12000 // Intervalo para lluvia de monedas (ms) - Más frecuente
 };
 
+// ===== FUNCIONES DE CONTROL DE MÚSICA =====
+
+/**
+ * Inicializa el sistema de música cargando la preferencia del usuario
+ */
+function initMusicSystem() {
+    // Cargar preferencia de música desde localStorage
+    const savedPreference = localStorage.getItem('cryptoGameMusicEnabled');
+    musicEnabled = savedPreference !== null ? JSON.parse(savedPreference) : true;
+    console.log(`🎵 Sistema de música inicializado. Estado: ${musicEnabled ? 'activado' : 'desactivado'}`);
+}
+
+/**
+ * Alterna el estado de la música de fondo
+ */
+function toggleMusic() {
+    // Desbloquear audio si es la primera interacción
+    unlockAudioContext();
+    
+    musicEnabled = !musicEnabled;
+    localStorage.setItem('cryptoGameMusicEnabled', JSON.stringify(musicEnabled));
+    
+    if (musicEnabled) {
+        // Reanudar música según la escena actual
+        if (currentScene === 'menu' || currentScene === 'gameover') {
+            playIntroMusic();
+        } else if (currentScene === 'game') {
+            playGameMusic();
+        }
+        console.log('🎵 Música activada');
+    } else {
+        // Detener toda música
+        stopAllMusic();
+        console.log('🔇 Música desactivada');
+    }
+    
+    // Actualizar botón en topbar
+    updateMusicButton();
+}
+
+/**
+ * Reproduce la música de introducción (menú y game over)
+ */
+function playIntroMusic() {
+    if (!musicEnabled || !introMusic) return;
+    
+    stopAllMusic();
+    try {
+        if (audioContextUnlocked) {
+            introMusic.play();
+            console.log('🎵 Reproduciendo música de introducción');
+        } else {
+            console.log('🎵 Música de introducción pendiente de interacción del usuario');
+        }
+    } catch (error) {
+        console.warn('⚠️ Error reproduciendo música de introducción:', error);
+    }
+}
+
+/**
+ * Reproduce la música del juego
+ */
+function playGameMusic() {
+    if (!musicEnabled || !gameMusic) return;
+    
+    stopAllMusic();
+    try {
+        if (audioContextUnlocked) {
+            gameMusic.play();
+            console.log('🎵 Reproduciendo música del juego');
+        } else {
+            console.log('🎵 Música del juego pendiente de interacción del usuario');
+        }
+    } catch (error) {
+        console.warn('⚠️ Error reproduciendo música del juego:', error);
+    }
+}
+
+/**
+ * Detiene toda la música de fondo
+ */
+function stopAllMusic() {
+    try {
+        if (introMusic && !introMusic.isPaused) {
+            introMusic.stop();
+        }
+        if (gameMusic && !gameMusic.isPaused) {
+            gameMusic.stop();
+        }
+    } catch (error) {
+        console.warn('⚠️ Error deteniendo música:', error);
+    }
+}
+
+/**
+ * Actualiza el estado visual del botón de música en la topbar
+ */
+function updateMusicButton() {
+    const musicButton = document.getElementById('music-toggle');
+    if (musicButton) {
+        if (!audioContextUnlocked && musicEnabled) {
+            musicButton.textContent = '🔊';
+            musicButton.title = 'Música activada (Click para iniciar)';
+            musicButton.style.opacity = '0.6';
+        } else {
+            musicButton.textContent = musicEnabled ? '🔊' : '🔇';
+            musicButton.title = musicEnabled ? 'Silenciar música' : 'Activar música';
+            musicButton.style.opacity = '1';
+        }
+    }
+}
+
+/**
+ * Desbloquea el contexto de audio después de la primera interacción del usuario
+ */
+function unlockAudioContext() {
+    if (!audioContextUnlocked && introMusic && gameMusic) {
+        // Intentar reproducir y pausar inmediatamente para desbloquear
+        try {
+            const testPlay = introMusic.play();
+            if (testPlay) {
+                introMusic.pause();
+            }
+            audioContextUnlocked = true;
+            console.log('🔓 Contexto de audio desbloqueado');
+            
+            // Actualizar botón de música
+            updateMusicButton();
+            
+            // Reproducir la música correspondiente a la escena actual
+            if (musicEnabled) {
+                if (currentScene === 'menu' || currentScene === 'gameover') {
+                    playIntroMusic();
+                } else if (currentScene === 'game') {
+                    playGameMusic();
+                }
+            }
+        } catch (error) {
+            console.log('⚠️ No se pudo desbloquear el contexto de audio:', error);
+        }
+    }
+}
+
 // ===== ESCENA DE MENÚ =====
 class MenuScene extends Phaser.Scene {
     constructor() {
@@ -55,6 +205,10 @@ class MenuScene extends Phaser.Scene {
         this.load.image('coin1', 'assets/coin1.png'); // Bitcoin
         this.load.image('coin2', 'assets/coin2.png'); // Ethereum
         this.load.image('sell', 'assets/sell.png');
+        
+        // Cargar archivos de música de fondo
+        this.load.audio('introSong', 'assets/audios/introSong.mp3');
+        this.load.audio('gameSong', 'assets/audios/gameSong.mp3');
         
         // Añadir eventos para verificar la carga
         this.load.on('filecomplete', (key, type, data) => {
@@ -75,20 +229,44 @@ class MenuScene extends Phaser.Scene {
     create() {
         console.log('🏗️ Creando MenuScene...');
         
+        // Inicializar sistema de música
+        initMusicSystem();
+        currentScene = 'menu';
+        
+        // Configurar música de fondo
+        if (!introMusic) {
+            introMusic = this.sound.add('introSong', { loop: true, volume: 0.3 });
+        }
+        if (!gameMusic) {
+            gameMusic = this.sound.add('gameSong', { loop: true, volume: 0.4 });
+        }
+        
+        // Reproducir música de introducción
+        playIntroMusic();
+        
         // Crear texturas de colores dinámicamente
         this.createColorTextures();
         
         // Fondo del menú
         this.add.rectangle(512, 384, 1024, 768, 0x87CEEB);
         
-        // Título del juego
-        this.add.text(512, 200, '🪙 CryptoGAME', {
+        // Título del juego (emoji a la izquierda del texto, ambos centrados)
+        const titleText = this.add.text(0, 0, 'CryptoGAME', {
             fontSize: '64px',
             fill: '#2d3748',
             fontWeight: 'bold'
-        }).setOrigin(0.5);
+        });
+        const emojiText = this.add.text(0, 0, '🪙', {
+            fontSize: '54px',
+            fontFamily: 'Arial'
+        });
+        const totalWidth = emojiText.width + 16 + titleText.width;
+        const centerX = 512;
+        const y = 150;
+        emojiText.setPosition(centerX - totalWidth / 2, y);
+        titleText.setPosition(emojiText.x + emojiText.width + 16, y - 6); // Ajuste vertical fino
         
-        this.add.text(512, 260, 'Recoge monedas y véndelas en el momento perfecto', {
+        this.add.text(512, 240, 'Recoge monedas y véndelas en el momento perfecto', {
             fontSize: '24px',
             fill: '#4a5568',
             fontStyle: 'italic'
@@ -105,7 +283,10 @@ class MenuScene extends Phaser.Scene {
         // Botón de inicio
         const startButton = this.add.rectangle(512, 400, 200, 60, 0x48bb78)
             .setInteractive()
-            .on('pointerdown', () => this.startGame())
+            .on('pointerdown', () => {
+                unlockAudioContext(); // Desbloquear audio con la primera interacción
+                this.startGame();
+            })
             .on('pointerover', () => startButton.setFillStyle(0x38a169))
             .on('pointerout', () => startButton.setFillStyle(0x48bb78));
         
@@ -117,7 +298,7 @@ class MenuScene extends Phaser.Scene {
         
         // Instrucciones mejoradas
         const instructions = [
-            '🏃‍♂️ Muévete: Flechas ← → o A D (movimiento suave)',
+            '🏃‍♂️ Muévete hacia los lados con las flechas ← → o las teclas A D',
             '🪙 Recoge monedas Bitcoin (₿) y Ethereum (Ξ)',
             '📊 Observa los precios en tiempo real (verde=sube, rojo=baja)',
             '💰 Mantén flecha derecha en SELL por 2 segundos para vender',
@@ -165,6 +346,7 @@ class MenuScene extends Phaser.Scene {
 
     startGame() {
         console.log('🎮 Iniciando juego...');
+        stopAllMusic(); // Detener música del menú
         this.scene.start('GameScene');
     }
 
@@ -180,6 +362,7 @@ class MenuScene extends Phaser.Scene {
             <div class="title">🪙 CryptoGame</div>
             <div class="record" id="topbar-record">Récord: $${this.getRecord()}</div>
             <div class="timer" id="topbar-timer">⏰ 2:00</div>
+            <button class="music-button" id="music-toggle" title="Alternar música">${musicEnabled ? '🔊' : '🔇'}</button>
             <div class="instructions">
                 <span>← →</span> Mueve
                 <span>🪙</span> Recoge
@@ -188,6 +371,12 @@ class MenuScene extends Phaser.Scene {
         `;
         document.body.appendChild(bar);
         this.topbarDiv = bar;
+        
+        // Añadir evento click al botón de música
+        const musicButton = document.getElementById('music-toggle');
+        if (musicButton) {
+            musicButton.addEventListener('click', toggleMusic);
+        }
     }
 
     getRecord() {
@@ -195,6 +384,9 @@ class MenuScene extends Phaser.Scene {
     }
 
     shutdown() {
+        // Detener música al salir de la escena
+        stopAllMusic();
+        
         // Eliminar barra al salir de la escena
         if (this.topbarDiv) {
             this.topbarDiv.remove();
@@ -275,10 +467,20 @@ class GameScene extends Phaser.Scene {
         this.collectParticles = null;
         this.sellParticles = null;
         this.topbarDiv = null;
+        
+        // Audio de progreso de venta
+        this.sellProgressSound = null;
+        this.sellProgressSoundPlaying = false;
     }
 
     create() {
         console.log('🏗️ Creando GameScene...');
+        
+        // Configurar escena actual para sistema de música
+        currentScene = 'game';
+        
+        // Reproducir música del juego
+        playGameMusic();
         
         // Reinicializar todas las variables del juego
         this.resetGameState();
@@ -594,7 +796,7 @@ class GameScene extends Phaser.Scene {
         this.sellZone.setDepth(10); // Asegurar que esté detrás del jugador
         
         // Añadir texto SELL con efecto mejorado
-        this.sellText = this.add.text(900, 500, 'SELL', {
+        this.sellText = this.add.text(960, 500, 'SELL', {
             fontSize: '36px',
             fill: '#2d3748',
             fontWeight: 'bold',
@@ -615,7 +817,7 @@ class GameScene extends Phaser.Scene {
         });
         
         // Instrucciones de venta
-        this.sellInstructionText = this.add.text(900, 540, 'Mantén → por 2 seg', {
+        this.sellInstructionText = this.add.text(935, 620, 'Mantén → por 2 seg', {
             fontSize: '14px',
             fill: '#4a5568',
             fontWeight: 'bold',
@@ -1122,6 +1324,9 @@ class GameScene extends Phaser.Scene {
                     alpha: 0.15,
                     duration: 200
                 });
+                
+                // Iniciar sonido de progreso
+                this.playSellProgressSound();
             }
             
             this.sellTimer += delta;
@@ -1130,16 +1335,24 @@ class GameScene extends Phaser.Scene {
             const progress = Math.min(this.sellTimer / GAME_SETTINGS.SELL_TIME, 1);
             this.sellProgressBar.setSize(140 * progress, 12);
             
-            // Cambiar color de la barra según progreso
+            // Cambiar color de la barra según progreso y reproducir sonidos
             if (progress < 0.3) {
                 this.sellProgressBar.setFillStyle(0xffd700); // Amarillo
                 this.sellProgressText.setText('VENDIENDO...');
             } else if (progress < 0.7) {
                 this.sellProgressBar.setFillStyle(0xff8c00); // Naranja
                 this.sellProgressText.setText('PROCESANDO...');
+                // Sonido de progreso intermedio
+                if (progress >= 0.3 && progress < 0.35 && !this.sellProgressSoundPlaying) {
+                    this.playSellProgressSound();
+                }
             } else {
                 this.sellProgressBar.setFillStyle(0x48bb78); // Verde
                 this.sellProgressText.setText('¡CASI LISTO!');
+                // Sonido de progreso final
+                if (progress >= 0.7 && progress < 0.75 && !this.sellProgressSoundPlaying) {
+                    this.playSellProgressSound();
+                }
             }
             
             // Efecto de pulsación en el texto SELL durante la venta
@@ -1182,6 +1395,9 @@ class GameScene extends Phaser.Scene {
         this.sellTimer = 0;
         this.hideSellProgress();
         
+        // Detener sonido de progreso
+        this.stopSellProgressSound();
+        
         // Efecto de éxito
         this.sellText.clearTint();
         this.tweens.add({
@@ -1206,6 +1422,9 @@ class GameScene extends Phaser.Scene {
         this.hideSellProgress();
         this.sellText.clearTint();
         this.controlsHintText.setText('Usa ← → o A D para moverte');
+        
+        // Detener sonido de progreso
+        this.stopSellProgressSound();
     }
     
     hideSellProgress() {
@@ -1765,6 +1984,9 @@ class GameScene extends Phaser.Scene {
     endGame() {
         this.gameStarted = false;
         
+        // Detener música del juego
+        stopAllMusic();
+        
         // Limpiar timers para evitar que sigan ejecutándose
         if (this.coinSpawnTimer) {
             this.coinSpawnTimer.destroy();
@@ -2040,6 +2262,77 @@ class GameScene extends Phaser.Scene {
             }, index * 120);
         });
     }
+    
+    playSellProgressSound() {
+        // Sonido de progreso durante la venta - campanita suave y musical
+        try {
+            if (this.sellProgressSoundPlaying) return; // Evitar múltiples sonidos simultáneos
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            // Crear sonido tipo campanita con armónicos
+            this.createProgressChime(audioContext);
+            
+            this.sellProgressSoundPlaying = true;
+            
+            // Resetear flag después del sonido
+            setTimeout(() => {
+                this.sellProgressSoundPlaying = false;
+            }, 600);
+            
+        } catch (error) {
+            console.log('🔇 Audio de progreso no disponible:', error.message);
+        }
+    }
+    
+    createProgressChime(audioContext) {
+        // Crear un sonido tipo campanita con múltiples armónicos
+        const progress = Math.min(this.sellTimer / GAME_SETTINGS.SELL_TIME, 1);
+        
+        // Frecuencia base que aumenta con el progreso (notas musicales)
+        const baseFrequencies = [523, 587, 659, 698, 784]; // Do, Re, Mi, Fa, Sol
+        const noteIndex = Math.floor(progress * (baseFrequencies.length - 1));
+        const baseFreq = baseFrequencies[noteIndex];
+        
+        // Crear múltiples osciladores para un sonido más rico
+        const oscillators = [];
+        const gainNodes = [];
+        
+        // Fundamental + armónicos
+        const harmonics = [1, 2, 3]; // Fundamental, octava, quinta
+        const volumes = [0.15, 0.08, 0.04]; // Volúmenes decrecientes
+        
+        harmonics.forEach((harmonic, index) => {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = baseFreq * harmonic;
+            oscillator.type = 'sine'; // Sonido suave y musical
+            
+            // Envelope tipo campanita (ataque rápido, decay suave)
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volumes[index], audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+            
+            oscillators.push(oscillator);
+            gainNodes.push(gainNode);
+        });
+    }
+    
+    stopSellProgressSound() {
+        // Detener sonido de progreso si está reproduciéndose
+        this.sellProgressSoundPlaying = false;
+    }
 
     createTopbar() {
         // Eliminar si ya existe
@@ -2052,7 +2345,7 @@ class GameScene extends Phaser.Scene {
         bar.innerHTML = `
             <div class="title">🪙 CryptoGame</div>
             <div class="record" id="topbar-record">Récord: $${this.getRecord()}</div>
-            <div class="timer" id="topbar-timer">⏰ 2:00</div>
+            <button class="music-button" id="music-toggle" title="Alternar música">${musicEnabled ? '🔊' : '🔇'}</button>
             <div class="instructions">
                 <span>← →</span> Mueve
                 <span>🪙</span> Recoge
@@ -2061,6 +2354,12 @@ class GameScene extends Phaser.Scene {
         `;
         document.body.appendChild(bar);
         this.topbarDiv = bar;
+        
+        // Añadir evento click al botón de música
+        const musicButton = document.getElementById('music-toggle');
+        if (musicButton) {
+            musicButton.addEventListener('click', toggleMusic);
+        }
     }
 
     getRecord() {
@@ -2082,6 +2381,9 @@ class GameScene extends Phaser.Scene {
     }
 
     shutdown() {
+        // Detener música al salir de la escena
+        stopAllMusic();
+        
         // Eliminar barra al salir de la escena
         if (this.topbarDiv) {
             this.topbarDiv.remove();
@@ -2113,6 +2415,12 @@ class GameOverScene extends Phaser.Scene {
 
     create() {
         console.log('🏁 Creando GameOverScene...');
+        
+        // Configurar escena actual para sistema de música
+        currentScene = 'gameover';
+        
+        // Reproducir música de introducción
+        playIntroMusic();
         
         // Fondo con gradiente
         this.add.rectangle(512, 384, 1024, 768, 0x2d3748);
@@ -2398,6 +2706,11 @@ function setupExternalControls() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 Iniciando CryptoGame...');
     initGame();
+    
+    // Añadir listener global para desbloquear audio con cualquier interacción
+    document.addEventListener('click', unlockAudioContext, { once: true });
+    document.addEventListener('keydown', unlockAudioContext, { once: true });
+    document.addEventListener('touchstart', unlockAudioContext, { once: true });
 });
 
 // Añadir estilos CSS para animaciones
