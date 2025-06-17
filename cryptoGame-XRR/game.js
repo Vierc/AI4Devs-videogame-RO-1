@@ -21,8 +21,8 @@ let game;
 // Configuración del juego (fácil de modificar)
 const GAME_SETTINGS = {
     GAME_DURATION: 120, // Duración del juego en segundos
-    COIN_SPAWN_MIN: 800, // Tiempo mínimo entre spawns de monedas (ms) - Más frecuente
-    COIN_SPAWN_MAX: 2500, // Tiempo máximo entre spawns de monedas (ms) - Más frecuente
+    COIN_SPAWN_MIN: 300, // Tiempo mínimo entre spawns de monedas (ms) - Mucho más frecuente
+    COIN_SPAWN_MAX: 1000, // Tiempo máximo entre spawns de monedas (ms) - Mucho más frecuente
     COIN_FALL_SPEED: 300, // Velocidad de caída de monedas (más rápida)
     COIN_FALL_SPEED_VARIATION: 80, // Variación en velocidad de caída
     PLAYER_SPEED: 500, // Velocidad de movimiento del jugador (más rápida)
@@ -35,9 +35,9 @@ const GAME_SETTINGS = {
     INITIAL_BITCOIN_PRICE: 50000,
     INITIAL_ETHEREUM_PRICE: 3000,
     PLAYER_BOUNDS_MARGIN: 50, // Margen desde los bordes de la pantalla
-    MAX_COINS_ON_SCREEN: 15, // Máximo número de monedas simultáneas
+    MAX_COINS_ON_SCREEN: 25, // Máximo número de monedas simultáneas (más monedas en pantalla)
     COIN_MAGNETISM_DISTANCE: 60, // Distancia para efecto de atracción sutil
-    COIN_RAIN_INTERVAL: 20000 // Intervalo para lluvia de monedas (ms)
+    COIN_RAIN_INTERVAL: 12000 // Intervalo para lluvia de monedas (ms) - Más frecuente
 };
 
 // ===== ESCENA DE MENÚ =====
@@ -199,7 +199,7 @@ class GameScene extends Phaser.Scene {
             maxDuration: Phaser.Math.Between(GAME_SETTINGS.PRICE_TREND_MIN_DURATION, GAME_SETTINGS.PRICE_TREND_MAX_DURATION)
         };
         this.ethereumTrend = {
-            direction: 1,
+            direction: -1, // Empieza opuesto a Bitcoin
             duration: 0,
             maxDuration: Phaser.Math.Between(GAME_SETTINGS.PRICE_TREND_MIN_DURATION, GAME_SETTINGS.PRICE_TREND_MAX_DURATION)
         };
@@ -212,7 +212,11 @@ class GameScene extends Phaser.Scene {
         
         // UI y puntuación
         this.balanceText = null;
-        this.totalSoldText = null;
+        this.currentGainText = null;
+        this.bitcoinIcon = null;
+        this.bitcoinCountText = null;
+        this.ethereumIcon = null;
+        this.ethereumCountText = null;
         this.timerText = null;
         this.bitcoinPriceText = null;
         this.ethereumPriceText = null;
@@ -220,7 +224,6 @@ class GameScene extends Phaser.Scene {
         this.ethereumPriceBox = null;
         this.sellProgressBar = null;
         this.sellProgressBg = null;
-        this.inventoryText = null;
         this.controlsHintText = null;
         
         this.currentBalance = 0;
@@ -310,7 +313,7 @@ class GameScene extends Phaser.Scene {
             maxDuration: Phaser.Math.Between(GAME_SETTINGS.PRICE_TREND_MIN_DURATION, GAME_SETTINGS.PRICE_TREND_MAX_DURATION)
         };
         this.ethereumTrend = {
-            direction: 1,
+            direction: -1, // Empieza opuesto a Bitcoin
             duration: 0,
             maxDuration: Phaser.Math.Between(GAME_SETTINGS.PRICE_TREND_MIN_DURATION, GAME_SETTINGS.PRICE_TREND_MAX_DURATION)
         };
@@ -380,19 +383,23 @@ class GameScene extends Phaser.Scene {
     createPlayer() {
         // Crear sombra del jugador primero (debajo)
         this.playerShadow = this.add.ellipse(512, 680, 60, 20, 0x000000, 0.3);
+        this.playerShadow.setDepth(50); // Capa intermedia para la sombra
         
         // Crear sprite del jugador
         this.player = this.physics.add.sprite(512, 650, 'player');
         
         // Configurar propiedades físicas del jugador
         this.player.setCollideWorldBounds(true);
-        this.player.setScale(0.7); // Tamaño apropiado
+        this.player.setScale(0.9); // Tamaño más grande y apropiado
         this.player.setSize(80, 100); // Hitbox ajustada
         this.player.setOffset(10, 10); // Centrar hitbox
         
         // Configurar física del jugador para movimiento DIRECTO (sin drag ni aceleración)
         this.player.setDrag(0); // Sin fricción para parada inmediata
         this.player.setMaxVelocity(GAME_SETTINGS.PLAYER_SPEED, 0);
+        
+        // Asegurar que el jugador esté por encima de otros elementos
+        this.player.setDepth(100); // Por debajo de las monedas pero por encima del resto
         
         // Configurar límites personalizados (no tocar los bordes exactos)
         this.player.body.setCollideWorldBounds(true);
@@ -543,6 +550,7 @@ class GameScene extends Phaser.Scene {
         // Crear stand de venta
         this.sellZone = this.add.image(900, 400, 'sell');
         this.sellZone.setScale(0.9);
+        this.sellZone.setDepth(10); // Asegurar que esté detrás del jugador
         
         // Añadir texto SELL con efecto mejorado
         this.sellText = this.add.text(900, 500, 'SELL', {
@@ -552,6 +560,7 @@ class GameScene extends Phaser.Scene {
             stroke: '#ffffff',
             strokeThickness: 3
         }).setOrigin(0.5);
+        this.sellText.setDepth(90); // Por encima del stand de venta
         
         // Animación del texto SELL
         this.tweens.add({
@@ -571,110 +580,267 @@ class GameScene extends Phaser.Scene {
             fontWeight: 'bold',
             align: 'center'
         }).setOrigin(0.5);
+        this.sellInstructionText.setDepth(90); // Por encima del stand de venta
         
         // Fondo de la barra de progreso (más visible)
-        this.sellProgressBg = this.add.rectangle(900, 350, 140, 16, 0x2d3748, 0.8);
+        this.sellProgressBg = this.add.rectangle(900, 80, 140, 16, 0x2d3748, 0.8);
         this.sellProgressBg.setStrokeStyle(2, 0x4a5568);
         this.sellProgressBg.setVisible(false);
+        this.sellProgressBg.setDepth(90); // Por encima del stand de venta
         
         // Barra de progreso de venta
-        this.sellProgressBar = this.add.rectangle(900, 350, 0, 12, 0x48bb78);
+        this.sellProgressBar = this.add.rectangle(900, 80, 0, 12, 0x48bb78);
         this.sellProgressBar.setVisible(false);
+        this.sellProgressBar.setDepth(95); // Por encima del fondo de la barra
         
         // Texto de progreso
-        this.sellProgressText = this.add.text(900, 330, 'VENDIENDO...', {
+        this.sellProgressText = this.add.text(900, 60, 'VENDIENDO...', {
             fontSize: '12px',
             fill: '#ffffff',
             fontWeight: 'bold'
         }).setOrigin(0.5);
         this.sellProgressText.setVisible(false);
+        this.sellProgressText.setDepth(95); // Por encima del stand de venta
         
         // Indicador de valor del inventario
-        this.potentialGainText = this.add.text(900, 570, '', {
+        this.potentialGainText = this.add.text(900, 110, '', {
             fontSize: '16px',
             fill: '#48bb78',
             fontWeight: 'bold',
             align: 'center'
         }).setOrigin(0.5);
+        this.potentialGainText.setDepth(90); // Por encima del stand de venta
         
         console.log('💰 Sistema de venta mejorado creado');
     }
 
     createPriceSystem() {
-        // Crear cajas de precios con mejor diseño
-        this.bitcoinPriceBox = this.add.rectangle(150, 200, 220, 70, 0x4299e1);
-        this.bitcoinPriceBox.setStrokeStyle(3, 0x2d3748);
+        // Crear paneles de fondo para las gráficas
+        this.bitcoinGraphPanel = this.add.rectangle(150, 240, 280, 100, 0x1a202c, 0.9);
+        this.bitcoinGraphPanel.setStrokeStyle(2, 0x4a5568);
         
-        this.ethereumPriceBox = this.add.rectangle(150, 290, 220, 70, 0x4299e1);
-        this.ethereumPriceBox.setStrokeStyle(3, 0x2d3748);
+        this.ethereumGraphPanel = this.add.rectangle(150, 360, 280, 100, 0x1a202c, 0.9);
+        this.ethereumGraphPanel.setStrokeStyle(2, 0x4a5568);
+        
+        // Crear contenedores para las gráficas (centrados con los paneles)
+        this.bitcoinGraphContainer = this.add.container(150, 240);
+        this.ethereumGraphContainer = this.add.container(150, 360);
+        
+        // Inicializar objetos de gráficas
+        this.bitcoinGraph = this.add.graphics();
+        this.ethereumGraph = this.add.graphics();
+        
+        // Añadir gráficas a sus contenedores
+        this.bitcoinGraphContainer.add(this.bitcoinGraph);
+        this.ethereumGraphContainer.add(this.ethereumGraph);
+        
+        // Configuración de las gráficas
+        this.graphConfig = {
+            width: 260,
+            height: 80,
+            maxPoints: 50,
+            lineWidth: 2,
+            greenColor: 0x48bb78,
+            redColor: 0xf56565,
+            gridColor: 0x2d3748
+        };
         
         // Inicializar historial de precios
         this.bitcoinPriceHistory = [this.bitcoinPrice];
         this.ethereumPriceHistory = [this.ethereumPrice];
         
-        console.log('📊 Sistema de precios creado');
+        // Crear títulos de las gráficas
+        this.bitcoinTitleText = this.add.text(150, 200, '₿ BITCOIN', {
+            fontSize: '14px',
+            fill: '#ffffff',
+            fontWeight: 'bold'
+        }).setOrigin(0.5);
+        
+        this.ethereumTitleText = this.add.text(150, 320, 'Ξ ETHEREUM', {
+            fontSize: '14px',
+            fill: '#ffffff',
+            fontWeight: 'bold'
+        }).setOrigin(0.5);
+        
+        // Dibujar gráficas iniciales (empezar con tendencia positiva)
+        this.drawPriceGraph(this.bitcoinGraph, this.bitcoinPriceHistory, true);
+        this.drawPriceGraph(this.ethereumGraph, this.ethereumPriceHistory, true);
+        
+        console.log('📊 Sistema de gráficas en tiempo real creado');
+    }
+    
+    drawPriceGraph(graphics, priceHistory, trendDirection) {
+        // Limpiar la gráfica anterior
+        graphics.clear();
+        
+        // Si no hay suficientes datos, no dibujar línea
+        if (priceHistory.length < 2) return;
+        
+        // Determinar color basado en la tendencia REAL (comparar último precio con anterior)
+        const currentPrice = priceHistory[priceHistory.length - 1];
+        const previousPrice = priceHistory[priceHistory.length - 2];
+        const isRising = currentPrice >= previousPrice;
+        
+        // Configurar colores según la tendencia real
+        const lineColor = isRising ? this.graphConfig.greenColor : this.graphConfig.redColor;
+        const fillColor = isRising ? 0x48bb78 : 0xf56565;
+        
+        // Definir márgenes para mantener la gráfica dentro del panel
+        const margin = 10;
+        const graphWidth = this.graphConfig.width - (margin * 2);
+        const graphHeight = this.graphConfig.height - (margin * 2);
+        // Centrar la gráfica dentro del contenedor
+        const offsetX = -(graphWidth / 2);
+        const offsetY = -(graphHeight / 2);
+        
+        // Dibujar rejilla de fondo sutil
+        graphics.lineStyle(1, this.graphConfig.gridColor, 0.2);
+        for (let i = 0; i <= 4; i++) {
+            const y = offsetY + (graphHeight / 4) * i;
+            graphics.moveTo(offsetX, y);
+            graphics.lineTo(offsetX + graphWidth, y);
+        }
+        
+        // Calcular valores mínimos y máximos para normalizar
+        const minPrice = Math.min(...priceHistory);
+        const maxPrice = Math.max(...priceHistory);
+        const priceRange = maxPrice - minPrice || 1; // Evitar división por cero
+        
+        // Calcular puntos de la gráfica
+        const points = [];
+        const maxPointsToShow = Math.min(priceHistory.length, this.graphConfig.maxPoints);
+        const stepX = graphWidth / (maxPointsToShow - 1);
+        
+        // Tomar los últimos N puntos del historial
+        const startIndex = Math.max(0, priceHistory.length - maxPointsToShow);
+        
+        for (let i = 0; i < maxPointsToShow; i++) {
+            const priceIndex = startIndex + i;
+            const x = offsetX + (i * stepX);
+            const normalizedPrice = (priceHistory[priceIndex] - minPrice) / priceRange;
+            const y = offsetY + graphHeight - (normalizedPrice * graphHeight);
+            points.push({ x, y });
+        }
+        
+        // Dibujar área de relleno con gradiente
+        if (points.length > 1) {
+            graphics.fillStyle(fillColor, 0.15);
+            graphics.beginPath();
+            graphics.moveTo(points[0].x, offsetY + graphHeight);
+            points.forEach(point => graphics.lineTo(point.x, point.y));
+            graphics.lineTo(points[points.length - 1].x, offsetY + graphHeight);
+            graphics.closePath();
+            graphics.fillPath();
+        }
+        
+        // Dibujar línea principal
+        graphics.lineStyle(this.graphConfig.lineWidth, lineColor, 1);
+        graphics.beginPath();
+        if (points.length > 0) {
+            graphics.moveTo(points[0].x, points[0].y);
+            for (let i = 1; i < points.length; i++) {
+                graphics.lineTo(points[i].x, points[i].y);
+            }
+        }
+        graphics.strokePath();
+        
+        // Dibujar punto actual (último punto) más visible
+        if (points.length > 0) {
+            const lastPoint = points[points.length - 1];
+            // Círculo de fondo blanco
+            graphics.fillStyle(0xffffff, 1);
+            graphics.fillCircle(lastPoint.x, lastPoint.y, 4);
+            // Círculo de color principal
+            graphics.fillStyle(lineColor, 1);
+            graphics.fillCircle(lastPoint.x, lastPoint.y, 3);
+        }
     }
 
     createUI() {
-        // Panel superior derecho - Balance con mejor diseño
-        const balancePanel = this.add.rectangle(850, 80, 320, 140, 0x2d3748, 0.9);
+        // Panel superior izquierdo - Balance encima de las gráficas
+        const balancePanel = this.add.rectangle(150, 100, 280, 110, 0x2d3748, 0.9);
         balancePanel.setStrokeStyle(2, 0x4a5568);
+        balancePanel.setDepth(85); // Por encima del fondo
         
-        this.balanceText = this.add.text(850, 50, 'Balance: $0.00', {
+        this.balanceText = this.add.text(150, 65, 'Balance: $0.00', {
             fontSize: '22px',
             fill: '#48bb78',
             fontWeight: 'bold'
         }).setOrigin(0.5);
+        this.balanceText.setDepth(90); // Por encima del panel
         
-        this.totalSoldText = this.add.text(850, 75, 'Total Vendido: $0.00', {
+        this.currentGainText = this.add.text(150, 90, 'Ganancia Actual: $0.00', {
             fontSize: '16px',
             fill: '#a0aec0'
         }).setOrigin(0.5);
+        this.currentGainText.setDepth(90); // Por encima del panel
         
-        this.inventoryText = this.add.text(850, 100, 'Inventario: 0 monedas', {
-            fontSize: '16px',
-            fill: '#a0aec0'
-        }).setOrigin(0.5);
+        // Inventario con imágenes de monedas (centrado y ordenado)
+        this.bitcoinIcon = this.add.image(110, 130, 'coin1');
+        this.bitcoinIcon.setScale(0.2);
+        this.bitcoinIcon.setDepth(90);
+        
+        this.bitcoinCountText = this.add.text(125, 130, '0', {
+            fontSize: '14px',
+            fill: '#f7931a',
+            fontWeight: 'bold'
+        }).setOrigin(0, 0.5);
+        this.bitcoinCountText.setDepth(90);
+        
+        this.ethereumIcon = this.add.image(160, 130, 'coin2');
+        this.ethereumIcon.setScale(0.2);
+        this.ethereumIcon.setDepth(90);
+        
+        this.ethereumCountText = this.add.text(175, 130, '0', {
+            fontSize: '14px',
+            fill: '#627eea',
+            fontWeight: 'bold'
+        }).setOrigin(0, 0.5);
+        this.ethereumCountText.setDepth(90);
         
         // Timer del juego con mejor estilo
         const timerBg = this.add.rectangle(512, 50, 200, 50, 0x2d3748, 0.8);
         timerBg.setStrokeStyle(2, 0x4a5568);
+        timerBg.setDepth(85); // Por encima del fondo
         
         this.timerText = this.add.text(512, 50, 'Tiempo: 2:00', {
             fontSize: '24px',
             fill: '#ffffff',
             fontWeight: 'bold'
         }).setOrigin(0.5);
+        this.timerText.setDepth(90); // Por encima del panel
         
-        // Precios de criptomonedas con mejor formato
-        this.bitcoinPriceText = this.add.text(150, 200, '₿ Bitcoin\n$50,000', {
+        // Precios de criptomonedas debajo de las gráficas
+        this.bitcoinPriceText = this.add.text(150, 280, '$50,000', {
             fontSize: '16px',
             fill: '#ffffff',
             fontWeight: 'bold',
             align: 'center'
         }).setOrigin(0.5);
+        this.bitcoinPriceText.setDepth(90); // Por encima de las gráficas
         
-        this.ethereumPriceText = this.add.text(150, 290, 'Ξ Ethereum\n$3,000', {
+        this.ethereumPriceText = this.add.text(150, 400, '$3,000', {
             fontSize: '16px',
             fill: '#ffffff',
             fontWeight: 'bold',
             align: 'center'
         }).setOrigin(0.5);
+        this.ethereumPriceText.setDepth(90); // Por encima de las gráficas
         
-        // Indicadores de tendencia
-        this.bitcoinTrendText = this.add.text(150, 230, '↗️ SUBIENDO', {
-            fontSize: '12px',
+        // Indicadores de tendencia junto a los precios
+        this.bitcoinTrendText = this.add.text(230, 280, '↗️', {
+            fontSize: '16px',
             fill: '#48bb78',
-            fontWeight: 'bold',
-            align: 'center'
+            fontWeight: 'bold'
         }).setOrigin(0.5);
+        this.bitcoinTrendText.setDepth(90); // Por encima de las gráficas
         
-        this.ethereumTrendText = this.add.text(150, 320, '↗️ SUBIENDO', {
-            fontSize: '12px',
-            fill: '#48bb78',
-            fontWeight: 'bold',
-            align: 'center'
+        this.ethereumTrendText = this.add.text(230, 400, '↘️', {
+            fontSize: '16px',
+            fill: '#f56565',
+            fontWeight: 'bold'
         }).setOrigin(0.5);
+        this.ethereumTrendText.setDepth(90); // Por encima de las gráficas
         
         // Indicador de controles dinámico
         this.controlsHintText = this.add.text(512, 720, 'Usa ← → o A D para moverte', {
@@ -682,12 +848,9 @@ class GameScene extends Phaser.Scene {
             fill: '#4a5568',
             fontStyle: 'italic'
         }).setOrigin(0.5);
+        this.controlsHintText.setDepth(90); // Por encima del fondo
         
-        // Estadísticas de recolección
-        this.statsText = this.add.text(50, 420, 'Bitcoin: 0 | Ethereum: 0', {
-            fontSize: '12px',
-            fill: '#4a5568'
-        });
+
         
         console.log('🖥️ Interfaz de usuario creada');
     }
@@ -703,6 +866,7 @@ class GameScene extends Phaser.Scene {
             tint: 0xf7931a, // Color Bitcoin
             alpha: { start: 1, end: 0 }
         });
+        this.bitcoinCollectParticles.setDepth(105); // Por encima del jugador
         
         // Partículas para recolección de Ethereum
         this.ethereumCollectParticles = this.add.particles(0, 0, 'coin2', {
@@ -714,6 +878,7 @@ class GameScene extends Phaser.Scene {
             tint: 0x627eea, // Color Ethereum
             alpha: { start: 1, end: 0 }
         });
+        this.ethereumCollectParticles.setDepth(105); // Por encima del jugador
         
         // Partículas para venta (mantener compatibilidad)
         this.sellParticles = this.add.particles(0, 0, 'coin1', {
@@ -726,6 +891,7 @@ class GameScene extends Phaser.Scene {
             alpha: { start: 1, end: 0 },
             rotate: { min: 0, max: 360 }
         });
+        this.sellParticles.setDepth(105); // Por encima del jugador
         
         // Partículas ambientales sutiles (lluvia de monedas de fondo)
         this.ambientParticles = this.add.particles(0, 0, 'coin1', {
@@ -740,6 +906,7 @@ class GameScene extends Phaser.Scene {
             tint: [0xffd700, 0xffff00, 0xffa500],
             alpha: { start: 0.2, end: 0 }
         });
+        this.ambientParticles.setDepth(5); // Por detrás de todo (efecto ambiental)
         
         // Partículas para efectos especiales (lluvia de monedas)
         this.rainParticles = this.add.particles(0, 0, 'coin2', {
@@ -754,6 +921,7 @@ class GameScene extends Phaser.Scene {
             tint: [0x627eea, 0x4169e1, 0x6495ed],
             alpha: { start: 0.8, end: 0 }
         });
+        this.rainParticles.setDepth(105); // Por encima del jugador durante eventos especiales
         
         console.log('✨ Efectos de partículas mejorados creados');
     }
@@ -794,7 +962,7 @@ class GameScene extends Phaser.Scene {
             this.playerDirection = 0;
         }
         
-        // Actualizar escala del jugador según dirección (efecto de volteo sutil)
+        // Actualizar dirección del jugador (volteo horizontal)
         if (this.playerDirection !== 0) {
             this.player.setFlipX(this.playerDirection < 0);
         }
@@ -856,6 +1024,7 @@ class GameScene extends Phaser.Scene {
     createCoinDisappearEffect(x, y) {
         // Crear efecto visual cuando una moneda toca el suelo
         const disappearEffect = this.add.circle(x, y, 20, 0xffffff, 0.5);
+        disappearEffect.setDepth(108); // Por encima de las monedas
         
         // Animación de desvanecimiento
         this.tweens.add({
@@ -1027,61 +1196,69 @@ class GameScene extends Phaser.Scene {
     updateUI() {
         // Actualizar textos de la interfaz mostrando claramente que son dólares
         this.balanceText.setText(`Balance: $${Math.round(this.currentBalance)}`);
-        this.totalSoldText.setText(`Total Vendido: $${Math.round(this.totalSold)}`);
-        this.inventoryText.setText(`Inventario: ${this.collectedCoins.length} monedas`);
+        
+        // Cambiar color del balance según si es positivo o negativo
+        if (this.currentBalance >= 0) {
+            this.balanceText.setColor('#48bb78'); // Verde para positivo
+        } else {
+            this.balanceText.setColor('#f56565'); // Rojo para negativo
+        }
+        
+        // Calcular ganancia actual (valor potencial del inventario)
+        let currentGain = 0;
+        this.collectedCoins.forEach(coin => {
+            const currentPrice = coin.type === 'coin1' ? this.bitcoinPrice : this.ethereumPrice;
+            currentGain += (currentPrice - coin.purchasePrice);
+        });
+        
+        // Mostrar ganancia actual con color
+        this.currentGainText.setText(`Ganancia Actual: ${currentGain >= 0 ? '+' : ''}$${currentGain.toFixed(2)}`);
+        if (currentGain >= 0) {
+            this.currentGainText.setColor('#48bb78'); // Verde para ganancia
+        } else {
+            this.currentGainText.setColor('#f56565'); // Rojo para pérdida
+        }
+        
+        // Actualizar contadores de inventario
+        const bitcoinInInventory = this.collectedCoins.filter(coin => coin.type === 'coin1').length;
+        const ethereumInInventory = this.collectedCoins.filter(coin => coin.type === 'coin2').length;
+        
+        this.bitcoinCountText.setText(bitcoinInInventory.toString());
+        this.ethereumCountText.setText(ethereumInInventory.toString());
         
         const minutes = Math.floor(this.gameTimer / 60);
         const seconds = Math.floor(this.gameTimer % 60);
         this.timerText.setText(`Tiempo: ${minutes}:${seconds.toString().padStart(2, '0')}`);
         
-        this.bitcoinPriceText.setText(`₿ Bitcoin\n$${this.bitcoinPrice.toLocaleString()}`);
-        this.ethereumPriceText.setText(`Ξ Ethereum\n$${this.ethereumPrice.toLocaleString()}`);
+        this.bitcoinPriceText.setText(`$${this.bitcoinPrice.toLocaleString()}`);
+        this.ethereumPriceText.setText(`$${this.ethereumPrice.toLocaleString()}`);
         
-        // Cambiar color de cajas según tendencia ACTUAL (no solo último cambio)
-        const bitcoinTrendDirection = this.bitcoinTrend ? this.bitcoinTrend.direction : 1;
-        const ethereumTrendDirection = this.ethereumTrend ? this.ethereumTrend.direction : 1;
+        // Determinar tendencias basadas en el cambio real de precios
+        const bitcoinIsRising = this.bitcoinPriceHistory.length >= 2 ? 
+            this.bitcoinPriceHistory[this.bitcoinPriceHistory.length - 1] >= this.bitcoinPriceHistory[this.bitcoinPriceHistory.length - 2] : true;
+        const ethereumIsRising = this.ethereumPriceHistory.length >= 2 ? 
+            this.ethereumPriceHistory[this.ethereumPriceHistory.length - 1] >= this.ethereumPriceHistory[this.ethereumPriceHistory.length - 2] : true;
         
-        // Actualizar indicadores de tendencia
+        // Actualizar indicadores de tendencia basados en la realidad
         if (this.bitcoinTrendText) {
-            const btcText = bitcoinTrendDirection > 0 ? '↗️ SUBIENDO' : '↘️ BAJANDO';
-            const btcColor = bitcoinTrendDirection > 0 ? '#48bb78' : '#f56565';
+            const btcText = bitcoinIsRising ? '↗️' : '↘️';
+            const btcColor = bitcoinIsRising ? '#48bb78' : '#f56565';
             this.bitcoinTrendText.setText(btcText);
             this.bitcoinTrendText.setColor(btcColor);
         }
         
         if (this.ethereumTrendText) {
-            const ethText = ethereumTrendDirection > 0 ? '↗️ SUBIENDO' : '↘️ BAJANDO';
-            const ethColor = ethereumTrendDirection > 0 ? '#48bb78' : '#f56565';
+            const ethText = ethereumIsRising ? '↗️' : '↘️';
+            const ethColor = ethereumIsRising ? '#48bb78' : '#f56565';
             this.ethereumTrendText.setText(ethText);
             this.ethereumTrendText.setColor(ethColor);
         }
         
-        // Animación suave de cambio de color basada en la tendencia actual
-        const bitcoinColor = bitcoinTrendDirection > 0 ? 0x48bb78 : 0xf56565;
-        const ethereumColor = ethereumTrendDirection > 0 ? 0x48bb78 : 0xf56565;
+        // Actualizar las gráficas en tiempo real
+        this.drawPriceGraph(this.bitcoinGraph, this.bitcoinPriceHistory, bitcoinIsRising);
+        this.drawPriceGraph(this.ethereumGraph, this.ethereumPriceHistory, ethereumIsRising);
         
-        this.tweens.add({
-            targets: this.bitcoinPriceBox,
-            fillColor: bitcoinColor,
-            duration: 300,
-            ease: 'Power2'
-        });
-        
-        this.tweens.add({
-            targets: this.ethereumPriceBox,
-            fillColor: ethereumColor,
-            duration: 300,
-            ease: 'Power2'
-        });
-        
-        // Actualizar contador de monedas en inventario (cesta)
-        const bitcoinInInventory = this.collectedCoins.filter(coin => coin.type === 'coin1').length;
-        const ethereumInInventory = this.collectedCoins.filter(coin => coin.type === 'coin2').length;
-        
-        this.statsText.setText(
-            `₿: ${bitcoinInInventory} | ` +
-            `Ξ: ${ethereumInInventory}`
-        );
+
     }
 
     updateVisualEffects() {
@@ -1089,23 +1266,26 @@ class GameScene extends Phaser.Scene {
         
         // Efecto de respiración en el jugador cuando está quieto
         if (!this.isMoving && this.player) {
-            const breathingScale = 1 + Math.sin(this.time.now * 0.003) * 0.02;
+            const breathingScale = 0.9 + Math.sin(this.time.now * 0.003) * 0.025;
             this.player.setScale(breathingScale);
+        } else if (this.isMoving && this.player) {
+            // Cuando se mueve, mantener el scale base sin deformación
+            this.player.setScale(0.9);
         }
         
-        // Efecto de pulsación en las cajas de precios según tendencia
-        if (this.bitcoinPriceBox) {
+        // Efecto de pulsación en los paneles de gráficas según tendencia
+        if (this.bitcoinGraphPanel) {
             const bitcoinPulse = this.bitcoinTrend.direction > 0 ? 
-                1 + Math.sin(this.time.now * 0.005) * 0.03 : 
-                1 - Math.sin(this.time.now * 0.005) * 0.02;
-            this.bitcoinPriceBox.setScale(bitcoinPulse);
+                1 + Math.sin(this.time.now * 0.005) * 0.02 : 
+                1 - Math.sin(this.time.now * 0.005) * 0.01;
+            this.bitcoinGraphPanel.setScale(bitcoinPulse);
         }
         
-        if (this.ethereumPriceBox) {
+        if (this.ethereumGraphPanel) {
             const ethereumPulse = this.ethereumTrend.direction > 0 ? 
-                1 + Math.sin(this.time.now * 0.004) * 0.03 : 
-                1 - Math.sin(this.time.now * 0.004) * 0.02;
-            this.ethereumPriceBox.setScale(ethereumPulse);
+                1 + Math.sin(this.time.now * 0.004) * 0.02 : 
+                1 - Math.sin(this.time.now * 0.004) * 0.01;
+            this.ethereumGraphPanel.setScale(ethereumPulse);
         }
         
         // Efecto de brillo en la zona de venta cuando hay monedas
@@ -1191,6 +1371,7 @@ class GameScene extends Phaser.Scene {
         // Configurar propiedades de la moneda
         coin.coinType = coinType;
         coin.setScale(0.5); // Tamaño más visible
+        coin.setDepth(110); // Máxima prioridad visual - por encima de todo
         
         // Configurar física de la moneda
         coin.body.setCircle(25); // Hitbox circular más precisa
@@ -1332,6 +1513,7 @@ class GameScene extends Phaser.Scene {
             stroke: '#ffffff',
             strokeThickness: 2
         }).setOrigin(0.5);
+        valueText.setDepth(115); // Por encima de las monedas
         
         // Animación del texto flotante
         this.tweens.add({
@@ -1349,6 +1531,7 @@ class GameScene extends Phaser.Scene {
     createCollectionWave(x, y) {
         // Crear onda expansiva visual
         const wave = this.add.circle(x, y, 5, 0xffffff, 0.6);
+        wave.setDepth(108); // Por encima de las monedas pero por debajo del texto
         
         this.tweens.add({
             targets: wave,
@@ -1470,18 +1653,28 @@ class GameScene extends Phaser.Scene {
     }
 
     updateCryptoPrices() {
-        // Actualizar tendencias de Bitcoin
+        // Actualizar tendencias de Bitcoin (será la tendencia principal)
         this.updatePriceTrend(this.bitcoinTrend);
         
-        // Actualizar tendencias de Ethereum
-        this.updatePriceTrend(this.ethereumTrend);
+        // Ethereum tendrá la tendencia opuesta a Bitcoin (con una pequeña probabilidad de seguir la misma)
+        // 85% de las veces será opuesta, 15% seguirá la misma tendencia para crear variabilidad
+        const oppositeChance = 0.85;
+        if (Math.random() < oppositeChance) {
+            // Ethereum tiene tendencia opuesta a Bitcoin
+            this.ethereumTrend.direction = -this.bitcoinTrend.direction;
+            this.ethereumTrend.duration = this.bitcoinTrend.duration;
+            this.ethereumTrend.maxDuration = this.bitcoinTrend.maxDuration;
+        } else {
+            // Ocasionalmente, actualizar Ethereum independientemente
+            this.updatePriceTrend(this.ethereumTrend);
+        }
         
-        // Actualizar precio de Bitcoin siguiendo la tendencia
+        // Actualizar precio de Bitcoin siguiendo su tendencia
         const bitcoinChange = this.calculatePriceChange(this.bitcoinPrice, this.bitcoinTrend.direction);
         this.bitcoinPrice = Math.max(1000, this.bitcoinPrice + bitcoinChange);
         this.bitcoinPriceHistory.push(this.bitcoinPrice);
         
-        // Actualizar precio de Ethereum siguiendo la tendencia
+        // Actualizar precio de Ethereum siguiendo su tendencia (ahora mayormente opuesta)
         const ethereumChange = this.calculatePriceChange(this.ethereumPrice, this.ethereumTrend.direction);
         this.ethereumPrice = Math.max(100, this.ethereumPrice + ethereumChange);
         this.ethereumPriceHistory.push(this.ethereumPrice);
@@ -1490,9 +1683,9 @@ class GameScene extends Phaser.Scene {
         if (this.bitcoinPriceHistory.length > 60) this.bitcoinPriceHistory.shift();
         if (this.ethereumPriceHistory.length > 60) this.ethereumPriceHistory.shift();
         
-        // Log de tendencias para debug
+        // Log de tendencias para debug - mostrar que son opuestas
         if (Math.random() < 0.1) { // Solo 10% de las veces para no saturar
-            console.log(`📈 Bitcoin: ${this.bitcoinTrend.direction > 0 ? '↗️' : '↘️'} $${this.bitcoinPrice.toFixed(0)} | Ethereum: ${this.ethereumTrend.direction > 0 ? '↗️' : '↘️'} $${this.ethereumPrice.toFixed(0)}`);
+            console.log(`📈 Bitcoin: ${this.bitcoinTrend.direction > 0 ? '↗️' : '↘️'} $${this.bitcoinPrice.toFixed(0)} | Ethereum: ${this.ethereumTrend.direction > 0 ? '↗️' : '↘️'} $${this.ethereumPrice.toFixed(0)} ${this.bitcoinTrend.direction !== this.ethereumTrend.direction ? '(Opuestas)' : '(Iguales)'}`);
         }
     }
     
@@ -1552,7 +1745,8 @@ class GameScene extends Phaser.Scene {
             profitableSales: this.profitableSales || 0,
             gameTime: GAME_SETTINGS.GAME_DURATION / 1000, // en segundos
             averageProfit: this.totalSales > 0 ? (this.totalSold / this.totalSales) : 0,
-            successRate: this.totalSales > 0 ? ((this.profitableSales / this.totalSales) * 100) : 0
+            successRate: this.totalSales > 0 ? ((this.profitableSales / this.totalSales) * 100) : 0,
+            coinsRemaining: this.collectedCoins ? this.collectedCoins.length : 0 // Monedas pendientes de vender
         };
         
         console.log('📊 Estadísticas finales:', gameStats);
@@ -1824,6 +2018,7 @@ class GameOverScene extends Phaser.Scene {
         this.gameTime = data.gameTime || 120;
         this.averageProfit = data.averageProfit || 0;
         this.successRate = data.successRate || 0;
+        this.coinsRemaining = data.coinsRemaining || 0;
     }
 
     create() {
@@ -1899,11 +2094,11 @@ class GameOverScene extends Phaser.Scene {
     
     createStatsPanel() {
         // Panel de fondo para estadísticas
-        const panelBg = this.add.rectangle(512, 400, 800, 320, 0x4a5568, 0.8);
+        const panelBg = this.add.rectangle(512, 420, 800, 320, 0x4a5568, 0.8);
         panelBg.setStrokeStyle(2, 0x718096);
         
         // Título del panel
-        this.add.text(512, 260, '📊 ESTADÍSTICAS DETALLADAS', {
+        this.add.text(512, 280, '📊 ESTADÍSTICAS DETALLADAS', {
             fontSize: '24px',
             fill: '#ffffff',
             fontWeight: 'bold'
@@ -1911,7 +2106,7 @@ class GameOverScene extends Phaser.Scene {
         
         // Columna izquierda - Recolección
         const leftX = 350;
-        let leftY = 300;
+        let leftY = 320;
         
         this.add.text(leftX, leftY, '🪙 RECOLECCIÓN', {
             fontSize: '18px',
@@ -1946,7 +2141,7 @@ class GameOverScene extends Phaser.Scene {
         
         // Columna derecha - Ventas
         const rightX = 674;
-        let rightY = 300;
+        let rightY = 320;
         
         this.add.text(rightX, rightY, '💰 VENTAS', {
             fontSize: '18px',
@@ -1955,7 +2150,7 @@ class GameOverScene extends Phaser.Scene {
         }).setOrigin(0.5);
         
         rightY += 30;
-        this.add.text(rightX, rightY, `Total vendido: $${this.totalSold.toFixed(0)}`, {
+        this.add.text(rightX, rightY, `Monedas pendientes: ${this.coinsRemaining}`, {
             fontSize: '16px',
             fill: '#e2e8f0'
         }).setOrigin(0.5);
